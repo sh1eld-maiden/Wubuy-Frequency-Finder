@@ -1,0 +1,5 @@
+to read file, enter its path after the program; as shown below:
+
+python 3 Frequency_Finder.py <file>
+
+Path is relative to programs location.
