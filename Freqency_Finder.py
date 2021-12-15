@@ -14,7 +14,7 @@ class PhonologicalValues:
 	def __init__(self, rawString):
 		self.letter = rawString
 		self.value = bool(V.match(rawString)) # V = true; C = false
-		logging.debug(self)
+		#logging.debug(self)
 
 	def __repr__ (self):
 		return (self.letter + ', ' + str(self.value))
@@ -37,7 +37,7 @@ class Word:
 				> underlined words - non native words
 				> (...) - annotations
 		"""
-		if re.search('^xxx|<und>|[()]', rawWordString):
+		if re.search('^xxx|</*und>|[()]', rawWordString):
 			self.valid = False
 
 		# only handle data if a valid word
@@ -89,7 +89,6 @@ class Word:
 			return ('word: ', self.rawString, ', paused: ',self.pausedBoundry, 'values: ', letterValues)
 		else:
 			return 'Invalid Word'
-
 class PhonotacticTargets:
 	def __init__(self, lable):
 		#initilise variables
@@ -98,7 +97,8 @@ class PhonotacticTargets:
 		self.paused = {}
 		self.unpausedTotal = 0
 		self.pausedTotal = 0
-
+		self.unpausedWords = {}
+		self.pausedWords = {}
 	def __str__(self):
 		output = self.lable + '\nUnpaused Boundries:\n'
 		for target in self.unpaused:
@@ -109,26 +109,46 @@ class PhonotacticTargets:
 		output += '\tTotal Paused: ' + str(self.pausedTotal) + '\n'
 		output += 'Total for ' + self.lable + ': ' + str(self.pausedTotal + self.unpausedTotal)
 
-		return output
+		return output + '\n'
 		
+	def wordEnviroments(self):
+		output = self.lable + '\nUnpaused Boundries:\n'
+		for target in self.unpaused:
+			output += '\t' + target + ': ' + str(self.unpaused[target]) + '\n'
+			for wordEnv in self.unpausedWords[target]:
+				output += '\t\t' + wordEnv + '\n'
+		output += '\tTotal Unpaused: ' + str(self.unpausedTotal) + '\nPaused Boundries:\n'
+		for target in self.paused:
+			output += '\t' + target + ': ' + str(self.paused[target]) + '\n'
+			for wordEnv in self.pausedWords[target]:
+				output += '\t\t' + wordEnv + '\n'
+		output += '\tTotal Paused: ' + str(self.pausedTotal) + '\n'
+		output += 'Total for ' + self.lable + ': ' + str(self.pausedTotal + self.unpausedTotal)
 
-	def add(self, value, paused):
+		return output + '\n'
+
+
+	def add(self, value, paused, word1, word2):
 		if paused:
 			if value in self.paused:
 				# if enviroment has been found previously, incriment value
 				self.paused[value] += 1
+				self.pausedWords[value].append(word1+'#'+word2)
 			else:
 				#otherwise add new enviroment to the list
 				self.paused.update({value:1})
+				self.pausedWords.update({value:[(word1+'#'+word2)]})
 			#incriment the count for target
 			self.pausedTotal += 1
 		else:
 			if value in self.unpaused:
 				# if enviroment has been found previously, incriment value
 				self.unpaused[value] += 1
+				self.unpausedWords[value].append(word1+'#'+word2)
 			else:
 				#otherwise add new enviroment to the list
 				self.unpaused.update({value:1})
+				self.unpausedWords.update({value:[(word1+'#'+word2)]})
 			#incriment the count for target
 			self.unpausedTotal += 1
 
@@ -183,7 +203,7 @@ def findWords():
 					# add entry to dictionary; key string is present
 					if keyString in targets:
 						logging.debug(keyString + ' Found: ' + lableString + ' with words ' + str(convertedWords[i]) + str(convertedWords[i+1]))
-						targets[keyString].add(lableString, convertedWords[i].pausedBoundry)
+						targets[keyString].add(lableString, convertedWords[i].pausedBoundry, convertedWords[i].rawString, convertedWords[i+1].rawString)
 		except IndexError:
 			logging.error("Error on word %d in paragraph %d, %s"%(i, currentParagraph, convertedWords[i].rawString))
 			logging.error('words: ' + str(len(convertedWords)) + ', i: ' + str(i) + ', keystring = ' + keyString)
@@ -204,9 +224,12 @@ currentParagraph = 0
 
 # converted word buffer
 convertedWords = []
-
-#open source file (sys.argv[1]; defined at run) in read mode
-file = open(sys.argv[1], 'r', encoding="utf-8")
+try:
+	#open source file (sys.argv[1]; defined at run) in read mode
+	file = open(sys.argv[1], 'r', encoding="utf-8")
+except:
+	#open test data if no other file selected
+	file = open('test data.txt', 'r', encoding="utf-8" )
 
 #loop over lines in file
 for line in file:
@@ -237,9 +260,13 @@ findWords()
 # output data
 output = open('output_long.txt', 'w', encoding="utf-8")
 summery = open('output.txt','w', encoding="utf-8")
+wordList = open('word_environments.txt', 'w', encoding="utf-8")
+
 for target in targets:
 	output.write(str(targets[target]) + '\n')
 	# write a summoriesed output lacking enviroments
 	summery.write(targets[target].lable + ':\n\tPaused: ' + str(targets[target].pausedTotal) + '\n\tUnpaused: ' + str(targets[target].unpausedTotal) + '\n\tTotal: ' + str(targets[target].pausedTotal + targets[target].unpausedTotal) + '\n')
+	wordList.write(targets[target].wordEnviroments() +'\n')
 output.close()
 summery.close()
+wordList.close()
