@@ -1,4 +1,15 @@
 # coding= utf-8
+
+"""
+	File name: Frequency_finder.py
+	Author: Chloe Turner
+	Date Created: 07/12/2021
+	Date Modified: 16/12/2021
+	Python version: 3.10
+
+	Version: 1.2
+"""
+
 import sys
 import re 		#regex
 import logging
@@ -12,7 +23,8 @@ pause = re.compile(u'[.,!]')		#pauses
 
 class PhonologicalValues:
 	def __init__(self, rawString):
-		self.letter = rawString
+		# convert the letter to lower case for the phonological information
+		self.letter = rawString.lower()
 		self.value = bool(V.match(rawString)) # V = true; C = false
 		#logging.debug(self)
 
@@ -20,6 +32,9 @@ class PhonologicalValues:
 		return (self.letter + ', ' + str(self.value))
 
 class Word:
+	# keeps track of weather invalid string end has ended
+	invalClosed = True
+
 	#at initilisation, convert raw word string into array of marked charicters
 	def __init__(self, rawWordString):
 		logging.debug(rawWordString)
@@ -37,11 +52,18 @@ class Word:
 				> underlined words - non native words
 				> (...) - annotations
 		"""
-		if re.search('^xxx|</*und>|[()]', rawWordString):
+		if re.search('xxx|<\/*und>|[()]', rawWordString):
+			# word is invalid
 			self.valid = False
+			if re.search('<und>|\(', rawWordString):
+				# make words invalid untill anitation or fouren string ends
+				Word.invalClosed = False
+			if re.search('<\/und>[.,]*$|\)[,.]*$', rawWordString):
+				# end of invalid string, only at word end
+				Word.invalClosed = True
 
-		# only handle data if a valid word
-		else:
+		# only handle data if a valid word; prevents words in the middle of brackets from being counted
+		elif Word.invalClosed:
 			#strip charicters to egnore
 			self.wordString = re.sub('["*øØ\'><]|(<\/*zigzag>)', '', rawWordString)
 			#check for pause at word boundry
@@ -154,6 +176,7 @@ class PhonotacticTargets:
 
 
 def findWords():
+	boundriesFound = 0
 	#loop through words to find phonotactical rules
 	for i in range(len(convertedWords)):
 		try:
@@ -161,9 +184,10 @@ def findWords():
 			keyString = ''
 			# ensure there is a word following to prevent overflow
 			if (i+1) < len(convertedWords):
-				
 				#ensure words are valid for analysis
 				if convertedWords[i].valid and convertedWords[i+1].valid:
+					# add to total word
+					boundriesFound += 1
 					# word final vowel
 					if convertedWords[i].wordAsValues[-1].value:
 						keyString += 'V#'
@@ -207,6 +231,9 @@ def findWords():
 		except IndexError:
 			logging.error("Error on word %d in paragraph %d, %s"%(i, currentParagraph, convertedWords[i].rawString))
 			logging.error('words: ' + str(len(convertedWords)) + ', i: ' + str(i) + ', keystring = ' + keyString)
+	
+	#return found boundries for data
+	return boundriesFound
 
 
 # initilise variables at run
@@ -221,6 +248,7 @@ logging.basicConfig(filename = 'logs/' + str(datetime.datetime.now())+ '.log', e
 
 # control variables
 currentParagraph = 0
+totalBoundries = 0
 
 # converted word buffer
 convertedWords = []
@@ -237,11 +265,12 @@ for line in file:
 	# if the new line is a new paragraph, handle all words in buffer and update paragraph before continuing
 	linePara = int(line[:(line.find('.'))])
 	if linePara != currentParagraph:
-		findWords()
+		totalBoundries += findWords()
 		# empty buffer of words
 		convertedWords.clear()
 		currentParagraph = linePara
 		print(linePara)
+		logging.debug('NEW PARAGRAPH: ' + str(linePara))
 
 	#split line into list by whitespace, striping new line charicters
 	new_line_list = re.split('\s+', line.strip('\n'))
@@ -255,7 +284,7 @@ for line in file:
 			convertedWords.append(Word(word))
 
 # handle the final paragraph's words
-findWords()
+totalBoundries += findWords()
 	
 # output data
 output = open('output_long.txt', 'w', encoding="utf-8")
@@ -267,6 +296,12 @@ for target in targets:
 	# write a summoriesed output lacking enviroments
 	summery.write(targets[target].lable + ':\n\tPaused: ' + str(targets[target].pausedTotal) + '\n\tUnpaused: ' + str(targets[target].unpausedTotal) + '\n\tTotal: ' + str(targets[target].pausedTotal + targets[target].unpausedTotal) + '\n')
 	wordList.write(targets[target].wordEnviroments() +'\n')
+
+output.write('Total Valid Boundries: ' + str(totalBoundries) + '\n')
+summery.write('Total Valid Boundries: ' + str(totalBoundries) + '\n')
+wordList.write('Total Valid Boundries: ' + str(totalBoundries) + '\n')
+
+
 output.close()
 summery.close()
 wordList.close()
