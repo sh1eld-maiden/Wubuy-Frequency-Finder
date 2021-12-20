@@ -10,11 +10,19 @@
 	Version: 1.2
 """
 
+# sgs: here's some notes now that i've finished reading the whole thing
+# great job. i love how readable the readme is, and i think you've got good code
+# i also feel like i understand what you're doing better now, which is nice :)
+# many of my comments are about considering how things could be extended or changed in the future. I don't know
+# how much you actually care about this - if you're just gonna use it for a bit and throw it away, that's fine
+
+
 import sys
 import re 		#regex
 import logging
 import datetime
 
+# sgs: okay this is hugely minor but: imo set your VS code settings to use 4 spaces instead of a tab for indentation. that's more common i think.
 
 #define Regex paterns
 # sgs: imo it's generally best to avoid single letter names
@@ -23,11 +31,15 @@ V = re.compile(u'[aiuoe]')			#Vowels
 pause = re.compile(u'[.,!]')		#pauses
 
 # sgs: would be good to give a brief comment describing what this class does and how to use it
+# sgs: this class seems suitable for unit testing by itself
 class PhonologicalValues:
 	def __init__(self, rawString):
 		# sgs: consider doing some input validation here: what if rawString does not match either C or V?
 		# convert the letter to lower case for the phonological information
 		self.letter = rawString.lower()
+		# sgs: i think it's a little weird that "value" means "is a vowel", but maybe that's normal for you linguists
+		# also confusing that a "PhonologicalValues" is actually only a single character
+		# also confusing that it may or may not have value == true
 		self.value = bool(V.match(rawString)) # V = true; C = false
 		#logging.debug(self)
 
@@ -35,15 +47,23 @@ class PhonologicalValues:
 		return (self.letter + ', ' + str(self.value))
 
 # sgs: would be good to give a brief comment describing what this class does and how to use it
+# sgs: this class seems suitable for unit testing by itself
 class Word:
-	# keeps track of weather invalid string end has ended
+	# keeps track of whether invalid string end has ended
+	# sgs: was a little surprised by the use of a, i guess, "static" class variable. i would usually think this is a bad idea.
+	# however i can see what problem it's solving for you. i think this is where reading more about parsers might pay off.
+	# it seems a bit difficult that parsing of the text is broken across various classes which access each other's data in unclear ways.
+	# but i don't have a great solution. 
+	# i feel like ideally you would just see the start of one of the invalid markers, then just scan ahead until you got to the end of the marker.
+	# but because the text is already broken into words at this point, that's harder. maybe you could refactor to do that? not sure if worth it.
 	invalClosed = True
 
-	#at initilisation, convert raw word string into array of marked charicters
+	#at initilisation, convert raw word string into array of marked characters
 	def __init__(self, rawWordString):
 		logging.debug(rawWordString)
 		#Initilise variables
 		self.wordAsValues = []
+		# sgs: boundary is spelled "boundary"
 		self.pausedBoundry = False
 		#store raw string
 		self.rawString = rawWordString
@@ -52,15 +72,16 @@ class Word:
 		self.valid = True
 		"""
 			Invalid words include:
-				> 'xxx' - uninteligable
+				> 'xxx' - unintelligible
 				> underlined words - non native words
 				> (...) - annotations
 		"""
 		if re.search('xxx|<\/*und>|[()]', rawWordString):
 			# word is invalid
 			self.valid = False
+			# sgs: some edge cases i'm wondering about: what if data is malformatted and an underlined word starts and never ends? or if it crosses paragraph boundary?
 			if re.search('<und>|\(', rawWordString):
-				# make words invalid untill anitation or fouren string ends
+				# make words invalid until annotation or foreign string ends
 				Word.invalClosed = False
 			if re.search('<\/und>[.,]*$|\)[,.]*$', rawWordString):
 				# end of invalid string, only at word end
@@ -68,7 +89,7 @@ class Word:
 
 		# only handle data if a valid word; prevents words in the middle of brackets from being counted
 		elif Word.invalClosed:
-			#strip charicters to egnore
+			#strip characters to ignore
 			self.wordString = re.sub('["*øØ\'><]|(<\/*zigzag>)', '', rawWordString)
 			#check for pause at word boundry
 			if pause.search(rawWordString):
@@ -80,9 +101,11 @@ class Word:
 
 			#loop over morphemes
 			for morpheme in self.morphemes:
-				# loop over charicters
+				# loop over characters
 				for char in morpheme:
-					if char == ":" or char == '\u032a':
+					#sgs: what character is \u032a, and why are these special? does letter always need to be set?
+					# sgs: what happens if this is the only character in the word?
+					if char == ":" or char == '\u032a': 
 						self.wordAsValues[-1].letter += char
 					else:
 						self.wordAsValues.append(PhonologicalValues(char))
@@ -106,6 +129,7 @@ class Word:
 		formattedString = ('Word: ' + self.rawString + '\nPaused Boundry: ' + str(self.pausedBoundry) + '\nStructure:\n' +firstLine +'\n' + secondLine)
 		return formattedString
 	
+	# sgs: huh do you really need to have both a __repr__ and a __str__? not very familiar with these, feel like one could call the other
 	def __repr__ (self):
 		if self.valid:
 			letterValues = '('
@@ -115,6 +139,8 @@ class Word:
 			return ('word: ', self.rawString, ', paused: ',self.pausedBoundry, 'values: ', letterValues)
 		else:
 			return 'Invalid Word'
+
+# sgs: again it's weird that PhonotacticTargets seems to store only a single target, not plural?
 class PhonotacticTargets:
 	def __init__(self, lable):
 		#initilise variables
@@ -138,6 +164,16 @@ class PhonotacticTargets:
 		return output + '\n'
 		
 	def wordEnviroments(self):
+
+		# sgs: you can use python format strings to insert values into a string by putting f before the string and using curly braces. for example you could write
+		# f"Total Unpaused: {self.unpausedTotal}"
+		# and the value of self.unpausedTotal will be converted to a string and inserted. pretty cool!
+		# this also words with multi-line strings using """
+		# i think you can also write "raw strings" that don't convert any escape characters using r:
+		# r"raw string \n\n\n\n"
+		# above string will have no actual newline characters. this is useful for writing regex strings. neat!
+
+
 		output = self.lable + '\nUnpaused Boundries:\n'
 		for target in self.unpaused:
 			output += '\t' + target + ': ' + str(self.unpaused[target]) + '\n'
@@ -153,50 +189,63 @@ class PhonotacticTargets:
 
 		return output + '\n'
 
-
+	# sgs: what should the type of these arguments be?
+	# sgs: i think youre gonna want to think carefully about what future work you might do when deciding how to structure this data.
+	# eg. if you ever want to iterate over all the matched environments, paused or unpaused, separating them out here might make it harder.
+	# are there any other categories of words you'll be adding? will future users ever want to do that? just something to put in the back of your mind
 	def add(self, value, paused, word1, word2):
 		if paused:
 			if value in self.paused:
-				# if enviroment has been found previously, incriment value
+				# if environment has been found previously, increment value
 				self.paused[value] += 1
 				self.pausedWords[value].append(word1+'#'+word2)
 			else:
-				#otherwise add new enviroment to the list
+				#otherwise add new environment to the list
 				self.paused.update({value:1})
 				self.pausedWords.update({value:[(word1+'#'+word2)]})
-			#incriment the count for target
+			#increment the count for target
 			self.pausedTotal += 1
 		else:
 			if value in self.unpaused:
-				# if enviroment has been found previously, incriment value
+				# if environment has been found previously, increment value
 				self.unpaused[value] += 1
 				self.unpausedWords[value].append(word1+'#'+word2)
 			else:
-				#otherwise add new enviroment to the list
+				#otherwise add new environment to the list
 				self.unpaused.update({value:1})
 				self.unpausedWords.update({value:[(word1+'#'+word2)]})
-			#incriment the count for target
+			#increment the count for target
 			self.unpausedTotal += 1
 
 # sgs: i think it's generally a bad idea to write functions which opeerate on global variables. it's hard to know what they depend on and what they will mutate.
 #  also it would make it harder to use the functions in this file as a module to be imported into other scripts.
 #  consider passing the global variables in as arguments instead.
+#  would also make unit testing easier
 # sgs: and yeah it's generally unclear to me what this function does. what are the inputs and outputs? 
+# sgs: write comment describing high level view of what this does. god i love documentation
 def findWords():
 	boundriesFound = 0
 	#loop through words to find phonotactical rules
 	for i in range(len(convertedWords)):
 		try:
+			# sgs: when declaring new variables, usually good to say what they do/are used for
 			lableString = ''
 			keyString = ''
 			# ensure there is a word following to prevent overflow
+			# sgs: what if the line has exactly one word?
 			if (i+1) < len(convertedWords):
 				#ensure words are valid for analysis
+				# sgs: worth logging/printing which words are ignored due to the adjacent words being invalid? seems like something user would care about.
+				# sgs: rather than repeatedly accessing convertedWords[i] and  convertedWords[i+1], which is hard to read and error prone, maybe assign to local variables and use those? maybe not i dunno
 				if convertedWords[i].valid and convertedWords[i+1].valid:
 					# add to total word
 					boundriesFound += 1
 					# word final vowel
 					if convertedWords[i].wordAsValues[-1].value:
+						# sgs: a lot of this code looks very copy-paste, just with different things being appended. is there any way to move it into a separate function?
+						# maybe you could automatically convert from a PhonologicalValues to a letter. hmm
+						# also, i think it's a red flag when you get nested this deeply into if-statements. would it be clearer if some of this was broken into a separate function?
+						# sgs: if there was a typo somewhere in here, how would you know?
 						keyString += 'V#'
 						lableString += (convertedWords[i].wordAsValues[-1].letter + '#')
 						logging.debug('final vowel')
@@ -206,12 +255,12 @@ def findWords():
 							keyString += 'V'
 							lableString += (convertedWords[i+1].wordAsValues[0].letter)
 						else:
-							logging.debug('initial constonent')
+							logging.debug('initial consonent')
 							keyString += 'C'
 							lableString += (convertedWords[i+1].wordAsValues[0].letter)
 					else:
-						logging.debug('final constonent')
-						#word final constonent
+						logging.debug('final consonent')
+						#word final consonent
 						if convertedWords[i].wordAsValues[-2].value:
 							logging.debug('VC end')
 							#VC ending
@@ -221,6 +270,7 @@ def findWords():
 							# CC ending
 							keyString += 'CC#'
 						# read final two letters as enviroment
+						# sgs: what if a word only has one letter? does the user get a useful error?
 						lableString += (convertedWords[i].wordAsValues[-2].letter + convertedWords[i].wordAsValues[-1].letter + '#')
 						#word initial value
 						if convertedWords[i+1].wordAsValues[0].value:
@@ -228,7 +278,7 @@ def findWords():
 							keyString += 'V'
 							lableString += (convertedWords[i+1].wordAsValues[0].letter)
 						else:
-							logging.debug('initial constonent')
+							logging.debug('initial consonent')
 							keyString += 'C'
 							lableString += (convertedWords[i+1].wordAsValues[0].letter)
 					# add entry to dictionary; key string is present
@@ -247,6 +297,8 @@ def findWords():
 # initilise variables at run
 # create dictionary of phonotactic enviroments
 # sgs: label is spelled "label"
+# sgs: seems like something the user will care about. maybe worth printing to the console to show what is being used? maybe worth making configurable?
+# sgs: if you have a lot of config, consider moving into a separate file the user can edit, rather than doing it all through the command line
 lables = ['CC#C','VC#C','V#C','V#V']
 targets = {}
 for lable in lables:
@@ -272,6 +324,7 @@ except:
 	file = open('test data.txt', 'r', encoding="utf-8" )
 
 #loop over lines in file
+# sgs: yeah i think i mentioned this earlier but have a google of "recursive descent parser". unfortunately that's about where my knowledge ends but might be interesting.
 for line in file:
 
 	# if the new line is a new paragraph, handle all words in buffer and update paragraph before continuing
@@ -280,6 +333,7 @@ for line in file:
 	# sgs: ok yeah i get it now. 
 	linePara = int(line[:(line.find('.'))])
 	if linePara != currentParagraph:
+		# seems a little weird that findWords operates on convertedWords, but the first time findWords is called, convertedWords will be empty. maybe you can rearrange the flow?
 		totalBoundries += findWords()
 		# empty buffer of words
 		convertedWords.clear()
@@ -293,6 +347,9 @@ for line in file:
 	del new_line_list[0]
 
 	#convert raw string into parsed words
+	# sgs: this is totally fine as-is, but have you seen list comprehensions in python? you could write this as something like
+	# convertedWords.append([Word(word) for word in new_line_list if word != ''])
+	# honestly looking at it i think that looks worse. nevermind
 	for word in new_line_list:
 		#ensure word has value
 		if word != '':
@@ -304,6 +361,8 @@ totalBoundries += findWords()
 # sgs: consider whether the output from this tool will ever be fed into another tool. if so, think about
 # 		making the format of the output more easily parsed by a computer, eg. a csv, or like a Pandas table or something. python has a csv package.
 # 		that's not the only option just one i thought of. writing to files line by line manually is error prone
+# 		nice thing about, say, Pandas tables, is that it provides function for writing to/from files for you, making saving/loading state easier.
+# 		numpy might do this too
 
 # sgs: if you use `with` to open files, it will automatically call close() when they go out of scope. for example
 # with open('a', 'w') as a, open('b', 'w') as b:
