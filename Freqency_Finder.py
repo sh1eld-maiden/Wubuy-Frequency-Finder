@@ -17,12 +17,15 @@ import datetime
 
 
 #define Regex paterns
-C = re.compile(u'[bɖwŋrɲgmyj]')	#Constonetns
+# sgs: imo it's generally best to avoid single letter names
+C = re.compile(u'[bɖwŋrɲgmyj]')	#Consonants
 V = re.compile(u'[aiuoe]')			#Vowels
 pause = re.compile(u'[.,!]')		#pauses
 
+# sgs: would be good to give a brief comment describing what this class does and how to use it
 class PhonologicalValues:
 	def __init__(self, rawString):
+		# sgs: consider doing some input validation here: what if rawString does not match either C or V?
 		# convert the letter to lower case for the phonological information
 		self.letter = rawString.lower()
 		self.value = bool(V.match(rawString)) # V = true; C = false
@@ -31,6 +34,7 @@ class PhonologicalValues:
 	def __repr__ (self):
 		return (self.letter + ', ' + str(self.value))
 
+# sgs: would be good to give a brief comment describing what this class does and how to use it
 class Word:
 	# keeps track of weather invalid string end has ended
 	invalClosed = True
@@ -174,7 +178,10 @@ class PhonotacticTargets:
 			#incriment the count for target
 			self.unpausedTotal += 1
 
-
+# sgs: i think it's generally a bad idea to write functions which opeerate on global variables. it's hard to know what they depend on and what they will mutate.
+#  also it would make it harder to use the functions in this file as a module to be imported into other scripts.
+#  consider passing the global variables in as arguments instead.
+# sgs: and yeah it's generally unclear to me what this function does. what are the inputs and outputs? 
 def findWords():
 	boundriesFound = 0
 	#loop through words to find phonotactical rules
@@ -229,6 +236,7 @@ def findWords():
 						logging.debug(keyString + ' Found: ' + lableString + ' with words ' + str(convertedWords[i]) + str(convertedWords[i+1]))
 						targets[keyString].add(lableString, convertedWords[i].pausedBoundry, convertedWords[i].rawString, convertedWords[i+1].rawString)
 		except IndexError:
+			# sgs: is it ok to just log the error and ignore it? what if the user never looks at the log? maybe print a warning, or return an error code, or something.
 			logging.error("Error on word %d in paragraph %d, %s"%(i, currentParagraph, convertedWords[i].rawString))
 			logging.error('words: ' + str(len(convertedWords)) + ', i: ' + str(i) + ', keystring = ' + keyString)
 	
@@ -238,12 +246,13 @@ def findWords():
 
 # initilise variables at run
 # create dictionary of phonotactic enviroments
+# sgs: label is spelled "label"
 lables = ['CC#C','VC#C','V#C','V#V']
 targets = {}
 for lable in lables:
 	targets.update({lable : PhonotacticTargets(lable)})
 
-# set up file logging - will create a new log fine for each exicution of file
+# set up file logging - will create a new log file for each execution of file
 logging.basicConfig(filename = 'logs/' + str(datetime.datetime.now())+ '.log', encoding='utf-8', level=logging.DEBUG)
 
 # control variables
@@ -254,6 +263,9 @@ totalBoundries = 0
 convertedWords = []
 try:
 	#open source file (sys.argv[1]; defined at run) in read mode
+	# sgs: the argparse library can handle getting the argument and providing a default value, see https://docs.python.org/3/library/argparse.html
+	# sgs: see comment below about using `with open(...)`. file.close() is missing
+	# also, if the user-provided file is corrupt or unable to be read, it would just happily use the default, which is confusing
 	file = open(sys.argv[1], 'r', encoding="utf-8")
 except:
 	#open test data if no other file selected
@@ -263,6 +275,9 @@ except:
 for line in file:
 
 	# if the new line is a new paragraph, handle all words in buffer and update paragraph before continuing
+	# sgs: this is confusing to me. maybe a little more explanation of how this tells you it's a new paragraph?
+	# sgs: maybe i just need a better understanding of the input file structure.
+	# sgs: ok yeah i get it now. 
 	linePara = int(line[:(line.find('.'))])
 	if linePara != currentParagraph:
 		totalBoundries += findWords()
@@ -285,7 +300,14 @@ for line in file:
 
 # handle the final paragraph's words
 totalBoundries += findWords()
-	
+
+# sgs: consider whether the output from this tool will ever be fed into another tool. if so, think about
+# 		making the format of the output more easily parsed by a computer, eg. a csv, or like a Pandas table or something. python has a csv package.
+# 		that's not the only option just one i thought of. writing to files line by line manually is error prone
+
+# sgs: if you use `with` to open files, it will automatically call close() when they go out of scope. for example
+# with open('a', 'w') as a, open('b', 'w') as b:
+# 		a.write("whatever")
 # output data
 output = open('output_long.txt', 'w', encoding="utf-8")
 summery = open('output.txt','w', encoding="utf-8")
@@ -293,7 +315,7 @@ wordList = open('word_environments.txt', 'w', encoding="utf-8")
 
 for target in targets:
 	output.write(str(targets[target]) + '\n')
-	# write a summoriesed output lacking enviroments
+	# write a summorised output lacking enviroments
 	summery.write(targets[target].lable + ':\n\tPaused: ' + str(targets[target].pausedTotal) + '\n\tUnpaused: ' + str(targets[target].unpausedTotal) + '\n\tTotal: ' + str(targets[target].pausedTotal + targets[target].unpausedTotal) + '\n')
 	wordList.write(targets[target].wordEnviroments() +'\n')
 

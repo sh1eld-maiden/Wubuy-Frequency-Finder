@@ -2,7 +2,7 @@
 
 ## Program overview
 
-The Wubuy Frequency Finder is a simple program which reads in formatted Wubuy texts and produces an output describing the phonotactic environments found at word boundaries. This output is split into 3 different files of increasing complexity. The first, *output.txt*, provides a summery of the different target environments, tallying paused and unpaused word boundaries separately. The second file, *output_long.txt*, provides the same information as the summery, with the addition of each exact phonological environments that were found. The final file, *word_environments.txt*, takes this a step further and provides a list of the words that created the environments in order of appearance.
+The Wubuy Frequency Finder is a simple program which reads in formatted Wubuy texts and produces an output describing the phonotactic environments found at word boundaries. This output is split into 3 different files of increasing complexity. The first, *output.txt*, provides a summery of the different target environments, tallying paused and unpaused word boundaries separately. The second file, *output_long.txt*, provides the same information as the summary, with the addition of each exact phonological environments that were found. The final file, *word_environments.txt*, takes this a step further and provides a list of the words that created the environments in order of appearance.
 
 The program ignores both morphological boundaries present in the input for the purposes of looking for sound environments, though these boundaries are preserved in the provided word-list. For further information on how the program handles input see the section on Formatting below.
 
@@ -25,7 +25,7 @@ The program assumes that the input file has no headings and each line starts wit
 
 >	\<paragraph>.\<line> \<page_number>
 	
-Additionally the program only currently supports text files that only contains the Wubuy language examples.
+Additionally the program only currently supports text files that only contains the Wubuy language examples. sgs: found this sentence confusing and don't understand it.
 
 ### Special characters
 
