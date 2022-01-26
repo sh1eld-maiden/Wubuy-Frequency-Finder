@@ -17,19 +17,123 @@ import datetime
 
 
 #define Regex paterns
-C = re.compile(u'[bɖwŋrɲgmyj]')	#Constonetns
-V = re.compile(u'[aiuoe]')			#Vowels
-pause = re.compile(u'[.,!]')		#pauses
+reC = re.compile(u'[bɖwŋrɲgmyj]')	#Constonetns
+reV = re.compile(u'[aiuoe]')			#Vowels
+rePause = re.compile(u'[.,!]')		#pauses
+
+"""
+	A phonotactic patern is a list of sound groups, boundries, and control values defined by a string.
+	Charicters and their meanings:
+		C 	- constonent
+		V	- vowel
+		-	- morpheme boundry
+		=	- verb root morpheme boundry
+		#	- word boundry
+		*	- at least one of the proceding value
+		.	- any target
+"""
+class Pattern:
+	def __inti__ (self, rawString):
+		self.pattern = []
+		# for each charicter in raw string
+		for i in rawString:
+			if i == 'V':
+				self.pattern.append(True)
+			elif i == 'C':
+				self.pattern.append(False)
+			else:
+				#control charicter
+				self.pattern.append(i)
+	
+	@staticmethod
+	def match (pattern, values: list, edge: str = 'l'):
+		# control variables
+		control = 'nil'
+		enviromentFound = ''
+		# right edge of values search
+		if edge == 'r':
+			j = -1
+			for i in range(-1, -(len(pattern.pattern))):
+				# look for control variable
+				if pattern.pattern[i] == '*':
+					control = '*'
+				# values 
+				if type(pattern.pattern[i]) == bool:
+					#handle control
+					if control == '*':
+						# one or more of charicter
+						temp = ''
+						while values[j].value == pattern.pattern[i]:
+							# add next charicter to enviroment if it matches pattern
+							temp = values[j].letter + temp
+							j -= 1
+						#check to see if match
+						if len(temp) == 0:
+							# no match found
+							return 'nil'
+						else:
+							#match found; add to frount of found enviroment. reset control
+							enviromentFound = temp + enviromentFound
+							control = 'nil'
+					#no control
+					else:
+						# check match
+						if values[j].value == pattern.pattern[i]:
+							enviromentFound = values[j].letter + enviromentFound
+							j -= 1
+						else:
+							return 'nil'
+		else:
+			# left edge search
+			j = 0
+			for i in range(len(pattern.pattern)):
+			# look for control variable
+				if pattern.pattern[i] == '*':
+					control = '*'
+				# values 
+				if type(pattern.pattern[i]) == bool:
+					#handle control
+					if control == '*':
+						# one or more of charicter
+						temp = ''
+						while values[j].value == pattern.pattern[i]:
+							# add next charicter to enviroment if it matches pattern
+							temp = values[j].letter + temp
+							j += 1
+						#check to see if match
+						if len(temp) == 0:
+							# no match found
+							return 'nil'
+						else:
+							#match found; add to frount of found enviroment. reset control
+							enviromentFound = temp + enviromentFound
+							control = 'nil'
+					#no control
+					else:
+						# check match
+						if values[j].value == pattern.pattern[i]:
+							enviromentFound = values[j].letter + enviromentFound
+							j += 1
+						else:
+							return 'nil'
+		
+		return enviromentFound
+
 
 class PhonologicalValues:
 	def __init__(self, rawString):
 		# convert the letter to lower case for the phonological information
 		self.letter = rawString.lower()
-		self.value = bool(V.match(rawString)) # V = true; C = false
+		self.value = bool(reV.match(rawString)) # V = true; C = false
 		#logging.debug(self)
 
 	def __repr__ (self):
 		return (self.letter + ', ' + str(self.value))
+
+class Morpheme:
+	def __init__ (self, boundry, charicters):
+		self.boundry = boundry
+		self.charicters = charicters
 
 class Word:
 	# keeps track of weather invalid string end has ended
@@ -40,6 +144,7 @@ class Word:
 		logging.debug(rawWordString)
 		#Initilise variables
 		self.wordAsValues = []
+		self.morphemes = []
 		self.pausedBoundry = False
 		#store raw string
 		self.rawString = rawWordString
@@ -67,21 +172,39 @@ class Word:
 			#strip charicters to egnore
 			self.wordString = re.sub('["*øØ\'><]|(<\/*zigzag>)', '', rawWordString)
 			#check for pause at word boundry
-			if pause.search(rawWordString):
+			if rePause.search(rawWordString):
 				self.pausedBoundry = True
 				# Strip the pause charicter from string
-				self.wordString = re.sub(pause, '', self.wordString)
+				self.wordString = re.sub(rePause, '', self.wordString)
 			#split word into morphemes
 			self.morphemes = re.split('[-=]', self.wordString)
 
+			_morphemeBounds = []
+
+			for char in self.wordString:
+				if re.search('[-=]', char):
+					_morphemeBounds.append(char)
+
 			#loop over morphemes
 			for morpheme in self.morphemes:
+				_morphemeVal = []
 				# loop over charicters
 				for char in morpheme:
 					if char == ":" or char == '\u032a':
-						self.wordAsValues[-1].letter += char
+						_morphemeVal[-1].letter += char
 					else:
-						self.wordAsValues.append(PhonologicalValues(char))
+						_morphemeVal.append(PhonologicalValues(char))
+				# add found values
+				self.wordAsValues = self.wordAsValues + _morphemeVal
+				# add morpheme
+				if len(_morphemeVal) > 0:
+					# create new morpheme with next bound
+					self.morphemes.append(Morpheme(_morphemeBounds[0],_morphemeVal))
+					# remove bound from list
+					_morphemeBounds.pop(0)
+				else:
+					# for final morpheme, add a word boundry
+					self.morphemes.append(Morpheme('#', _morphemeVal))
 		# if word has no values set valid to false
 		if len(self.wordAsValues) == 0:
 			self.valid = False
@@ -111,7 +234,27 @@ class Word:
 			return ('word: ', self.rawString, ', paused: ',self.pausedBoundry, 'values: ', letterValues)
 		else:
 			return 'Invalid Word'
+
 class PhonotacticTargets:
+	def __init__ (self, lable):
+		#initilise variables
+		self.lable = lable
+		self.enviroment = {}
+		self.tally = 0
+		self.words = {} #key = enviroment
+
+	def add (self, value, word):
+		#check subpaterns
+		if self.subordPattern[0] != 'nill':
+			for _pattern in self.subordPattern:
+				pass
+	
+	def search(self, word):
+		pass
+	
+
+		
+class WordboundTargets (PhonotacticTargets):
 	def __init__(self, lable):
 		#initilise variables
 		self.lable = lable
@@ -121,6 +264,13 @@ class PhonotacticTargets:
 		self.pausedTotal = 0
 		self.unpausedWords = {}
 		self.pausedWords = {}
+		# split lable into two patterns
+		self.patterns = []
+		patternstring = re.split('#', lable) # patterns[0] = word1; patterns[1] = word2 start
+		# create patern as an array of booleans (T = V, F = C) and control charicters
+		for pattern in patternstring:
+			self.patterns.append(Pattern(pattern))
+
 	def __str__(self):
 		output = self.lable + '\nUnpaused Boundries:\n'
 		for target in self.unpaused:
@@ -150,7 +300,7 @@ class PhonotacticTargets:
 		return output + '\n'
 
 
-	def add(self, value, paused, word1, word2):
+	def add(self, value: str, paused: bool, word1: str, word2: str):
 		if paused:
 			if value in self.paused:
 				# if enviroment has been found previously, incriment value
@@ -174,10 +324,96 @@ class PhonotacticTargets:
 			#incriment the count for target
 			self.unpausedTotal += 1
 
+	def search (self, word1: Word, word2: Word):
+		# search first word end
+		environmentFound = Pattern.search(self.patterns[0], word1.wordAsValues, 'r')
+		if environmentFound == 'nil':
+			return False
+		# enter word boundry
+		environmentFound += '#'
+		# search second word
+		temp = Pattern.search(self.patterns[1],word2.wordAsValues, 'l')
+		if temp == 'nil':
+			return False
+		environmentFound += temp
+		# add found enviroment
+		self.add(environmentFound, word1.pausedBoundry, word1.wordString, word2.wordString)
+		return True
 
+class MorphemeBoundTarget (PhonotacticTargets):
+	def __init__ (self, lable):
+		self.lable = lable
+		self.verbRoot = {}
+		self.verbRootWords = {}
+		self.verbRootTotal = 0
+		self.enviroment = {}
+		self.tally = 0
+		self.words = {}
+		#split lable into enviroments
+		self.patterns = re.split('[-=]', lable)
+
+	def __str__ (self):
+		output = self.lable + ':\n\tVerb Roots:\n'
+		for target in self.verbRoot:
+			output += '\t\t' + target + ": " + self.verbRoot[target] + '\n'
+		output += '\tTotal: ' + str(self.verbRootTotal) + '\nReguler morpheme boundries: \n'
+		for target in self.enviroment:
+			output += '\t' + target + ': ' + self.enviroment[target] + '\n'
+		output += "Total: " + str(self.tally) + '(including verb root boundries: ' + str(self.tally + self.verbRootTotal) + ')\n'
+		return output
+
+	def wordEnviroments(self):
+		output = self.lable + ':\n\tVerb Roots:\n'
+		for target in self.verbRoot:
+			output += '\t\t' + target + ": " + self.verbRoot[target] + '\n'
+			for word in self.verbRootWords[target]:
+				output += '\t\t\t' + word + '\n'
+		output += '\tTotal: ' + str(self.verbRootTotal) + '\nReguler morpheme boundries: \n'
+		for target in self.enviroment:
+			output += '\t' + target + ': ' + self.enviroment[target] + '\n'
+			for word in self.words:
+				output += '\t\t' + word + '\n'
+		output += "total: " + str(self.tally) + '(including verb root boundries: ' + str(self.tally + self.verbRootTotal) + ')\n'
+		return output
+	def summery(self):
+		return self.lable + '\n\tVerb Root morpheme boundry: ' + str(self.verbRootTotal) + "\ntotal: " + str(self.tally) + '(including verb root boundries: ' + str(self.tally + self.verbRootTotal) + ')\n'
+	def add (self, value: str, word: str):
+		# check to see if special case
+		if re.search('=', value):
+			if value in self.verbRoot:
+				# already exsissts in data
+				self.verbRoot[value] += 1
+				self.verbRootTotal += 1
+				self.verbRootWords[value].append(word)
+			else:
+				# add new enviroment
+				self.verbRoot.update({value:1})
+				self.verbRootTotal += 1
+				self.verbRootWords.update({value:[word]})
+		else:
+			# non verb root enviroment
+			if value in self.verbRoot:
+				# already exsissts in data
+				self.enviroment[value] += 1
+				self.tally += 1
+				self.words[value].append(word)
+			else:
+				# add new enviroment
+				self.enviroment.update({value:1})
+				self.tally += 1
+				self.words[value].update({value:word})
+
+	def search (self, word: Word):
+		for i in range(len(word.morphemes)):
+			#ensure there is a morpheme to follow
+			if i+1 < len(word.morphemes):
+				Pattern.search()
+	
 def findWords():
 	boundriesFound = 0
-	#loop through words to find phonotactical rules
+	#loop through words to find phonotactical rules:
+	# word boundry patterns
+	
 	for i in range(len(convertedWords)):
 		try:
 			lableString = ''
@@ -238,6 +474,8 @@ def findWords():
 
 # initilise variables at run
 # create dictionary of phonotactic enviroments
+lableFile = open('targets.txt', 'r')
+soundClasses = []
 lables = ['CC#C','VC#C','V#C','V#V']
 targets = {}
 for lable in lables:
