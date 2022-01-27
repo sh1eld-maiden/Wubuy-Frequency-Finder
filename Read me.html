@@ -44,6 +44,127 @@
 <li>(…)				- annotations</li>
 <li>–					- interruption in text</li>
 </ul>
+<h2>Patterns</h2>
+<p>The program searches for environments that match the phonotactic patterns defined in <em>targets.txt</em>, with each pattern being on a separate line. A pattern is defined by sound classes, boundary markers, and control characters. Examples of patterns are:</p>
+<ul>
+<li>CC#C</li>
+<li>VC#C</li>
+<li>VCC*</li>
+<li>OS</li>
+</ul>
+<h3>Sound Classes</h3>
+<p>The program currently recognises some broad sound classes, outlined in the table below:</p>
+<table>
+<thead>
+<tr>
+<th>Sound Class</th>
+<th>Symbol</th>
+<th>Set</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Consonant</td>
+<td>C</td>
+<td>[bd̪dɖjgmn̪nɳɲŋrɽl̪lɭyw]</td>
+</tr>
+<tr>
+<td>Vowel</td>
+<td>V</td>
+<td>[ii:uu:oo:aa:]</td>
+</tr>
+<tr>
+<td>Plosive</td>
+<td>P</td>
+<td>[bd̪dɖjg]</td>
+</tr>
+<tr>
+<td>Nasal</td>
+<td>N</td>
+<td>[mn̪nɳɲŋ]</td>
+</tr>
+<tr>
+<td>Continuant</td>
+<td>K</td>
+<td>[rɽl̪lɭyw]</td>
+</tr>
+<tr>
+<td>Obstruant</td>
+<td>O</td>
+<td>[bd̪dɖjgmn̪nɳɲŋ]</td>
+</tr>
+<tr>
+<td>Sonorant</td>
+<td>S</td>
+<td>[mn̪nɳɲŋrɽl̪lɭyw]</td>
+</tr>
+</tbody>
+</table>
+<h3>Boundary Markers</h3>
+<p>The program is able to handle patterns that intersect a single morpheme or word boundary by using the following notation:</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Boundary Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>-</td>
+<td>- Morpheme Boundary</td>
+</tr>
+<tr>
+<td>#</td>
+<td>- Word Boundary</td>
+</tr>
+</tbody>
+</table>
+<h3>Control Characters</h3>
+<p>More complex patterns can be defined through the use of control characters. A summery of the characters and there use can be found in the table below, with a more full explanation of each following.</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Name</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>*</td>
+<td>Or More</td>
+<td>Matches all following occurrences of sound class</td>
+</tr>
+<tr>
+<td>^</td>
+<td>Not</td>
+<td>Alters the next target to match only phonemes that are not part of it’s class</td>
+</tr>
+<tr>
+<td>.</td>
+<td>Wildcard</td>
+<td>Matches any one phoneme</td>
+</tr>
+<tr>
+<td>(xy…)</td>
+<td>Set</td>
+<td>Matches a phoneme if it matches any member of set xy</td>
+</tr>
+</tbody>
+</table>
+<h4>Or More (*)</h4>
+<p>The ‘Or More’ modifier alters the pattern to look for an arbitrary number of a target sound class rather then just a single instance. The minimum number of phonemes in a cluster required for a match is dependent on the pattern. For example C* will match with any cluster of one or more consonants, while CC* will only match with two or more.</p>
+<p>The ‘Or More’ modifier can be used in conjunction with the Not modifier and Sets as well as single sound classes.</p>
+<p>If the ‘Or More’ control is used on a Wildcard (.), the pattern will match with all phonemes up until one that matches the next target.</p>
+<h4>Not (^)</h4>
+<p>The not control inverts the next target, so it will match with anything but the specified sound classes. This can be used with a Set or single sound class.</p>
+<h4>Wildcard (.)</h4>
+<p>The Wildcard will always match with a phoneme. While it does not care what it matches with, there needs to be a phoneme within the morpheme or word boundary (defaulting to word boundary if not specified). This way a minimum length of a word or morpheme can be specified though the insertion of wildcards after the target pattern.</p>
+<p>E.g. ..VC-. will look for a non word final morpheme that ends with a VC pattern, <em>and</em> is at least 4 phonemes long.</p>
+<p>Note: ^. will never match with anything, as it means “Not any phoneme”</p>
+<h4>Sets</h4>
+<p>A set is a collection of sound classes that will match a single phoneme that matches any of the target classes. The Not control works as expected, matching anything not of the next target class, as does the Wildcard. The Or More control can be inserted into a Set without causing issues, and will match an arbitrary number of the preceding sound class.</p>
 <h2>Log files</h2>
 <p>Each time the program is run it will produce a log file, named for the time of program execution. This provides a breakdown of each word found by the program, as well as the matches found. However they are primarily for the purposes of finding errors, and can safely be ignored.</p>
 </body></html>
