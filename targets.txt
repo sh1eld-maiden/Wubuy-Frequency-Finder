@@ -4,4 +4,3 @@ V#C
 V#V
 CC*
 C*-C
-    C*=C
