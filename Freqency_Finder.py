@@ -10,6 +10,7 @@
 	Version: 1.2
 """
 
+from enum import Enum
 import sys
 import re 		#regex
 import logging
@@ -17,10 +18,51 @@ import datetime
 import configparser
 
 
-#define Regex paterns
-reC = re.compile(u'[bɖwŋrɲgmyj]')	#Constonetns
-reV = re.compile(u'[aiuoe]')		#Vowels
-rePause = re.compile(u'[.,!]')		#pauses
+# define Regex paterns
+reC = re.compile(u'[dbɖgjmnɲɳŋrlywɭɽ]')	# Constonetns
+reP = re.compile(u'[dbɖgj]')			# Stops/Plosives
+reN = re.compile(u'[mnɲɳŋ]')			# Nasals
+reK = re.compile(u'[rlywɭɽ]')			# Sonorents
+reV = re.compile(u'[aiuoe]')			# Vowels
+rePause = re.compile(u'[.,!]')			# pauses
+
+class PhonologicalClasses(Enum):
+	CONSONANT = 'C'
+	VOWEL = 'V'
+	PLOSIVE = 'P'
+	NASAL = 'N'
+	CONTINUANT = 'K'			
+	OBSTRUENT = 'O'	#stop and nasal
+	SONORENT = 'S'
+
+class PhonologicalValue:
+	def __init__(self, rawString):
+		# convert the letter to lower case for the phonological information
+		self.letter = rawString.lower()
+		self.value = PhonologicalValue.toClass(rawString)
+
+	def __repr__ (self):
+		return (self.letter + ', ' + str(self.value))
+
+	def toClass(rawString: str):
+		"""returns all valid sound classes for a given letter as an array"""
+		classes = []
+		if reC.search(rawString):
+			classes.append(PhonologicalClasses.CONSONANT)
+		if reV.search(rawString):
+			classes.append(PhonologicalClasses.VOWEL)
+		if reP.search(rawString):
+			classes.append(PhonologicalClasses.PLOSIVE)
+			classes.append(PhonologicalClasses.OBSTRUENT)
+		if reN.search(rawString):
+			classes.append(PhonologicalClasses.NASAL)
+			classes.append(PhonologicalClasses.OBSTRUENT)
+		if reK.search(rawString):
+			classes.append(PhonologicalClasses.CONTINUANT)
+			classes.append(PhonologicalClasses.SONORENT)
+
+		return classes
+
 
 """
 	A phonotactic patern is a list of sound groups, boundries, and control values defined by a string.
@@ -32,6 +74,8 @@ rePause = re.compile(u'[.,!]')		#pauses
 		#	- word boundry
 		*	- at least one of the proceding value
 		.	- any target
+		^	- not next value
+		(xy)- one of set
 """
 class PhonoPattern:
 	def __init__ (self, rawString: str, pattern: list = ['nil']):
@@ -39,15 +83,47 @@ class PhonoPattern:
 			# base constructer
 			self.pattern = []
 			self.lable = rawString.strip('\n')
-			# for each charicter in raw string
+			# for each charicter in raw string convert it to the appropriate value
+			temp = []
+			temp2 = []
+			subpattern = False
 			for i in self.lable:
-				if i == 'V':
-					self.pattern.append(True)
-				elif i == 'C':
-					self.pattern.append(False)
+				if subpattern:
+					if i == ')':
+						# end of group, convert to aray of PhonoPattern
+						for j in temp2:
+							temp.append(PhonoPattern(j))
+						self.pattern.append(temp)
+						temp.clear()
+						subpattern = False
+					else:
+						# split into sub patterns
+						# handle not control and or more control
+						if len(temp2) > 0 and temp2[-1] == '^' or i == '*':
+							temp2[-1] += i
+						else:
+							temp2.append(i)
+						
 				else:
-					#control charicter
-					self.pattern.append(i)
+					if i == 'V':
+						self.pattern.append(PhonologicalClasses.VOWEL)
+					elif i == 'C':
+						self.pattern.append(PhonologicalClasses.CONSONANT)
+					elif i == 'P':
+						self.pattern.append(PhonologicalClasses.PLOSIVE)
+					elif i == 'N':
+						self.pattern.append(PhonologicalClasses.NASAL)
+					elif i == 'K':
+						self.pattern.append(PhonologicalClasses.CONTINUANT)
+					elif i == 'O':
+						self.pattern.append(PhonologicalClasses.OBSTRUENT)
+					elif i == 'S':
+						self.pattern.append(PhonologicalClasses.SONORENT)
+					elif i == '(':
+						subpattern = True
+					else:
+						#control charicter
+						self.pattern.append(i)
 		else:
 			# externally defined pattern constructor
 			self.lable = rawString
@@ -62,7 +138,25 @@ class PhonoPattern:
 		#loop through pattern, adding each element to start
 		previous = 'nil'
 		for sub in self.pattern:
-			if type(sub) == bool:
+			#if not a string then phonological values
+			if type(sub) != str:
+				#check to see if negative is added
+				if previous == '^':
+					temp.insert(0, '^')
+
+				temp.insert(0,sub)
+				previous = sub
+			#if string, then need to handle placement based on controll.
+			elif sub == '(':
+				# groups are equivilent when reversed, just need to flip brackets
+				temp.insert(0, ')')
+			elif sub == ')':
+				# groups are equivilent when reversed, just need to flip brackets
+				temp.insert(0, '(')
+			# negative is handled in next charicter
+			elif sub == '^':
+				previous = sub
+			elif sub == '.':
 				previous = sub
 				temp.insert(0, sub)
 			else:
@@ -72,6 +166,10 @@ class PhonoPattern:
 				for element in temp:
 					if element == previous:
 						i += 1
+					elif element == '^':
+						# previous element not actually a match
+						i -=i
+						break
 					else:
 						# change in value, position found
 						break
@@ -82,12 +180,27 @@ class PhonoPattern:
 		#return new pattern
 		return PhonoPattern(self.lable, temp)
 
+	def matchVal (letter: PhonologicalValue, patternValue):
+		"""Compares a single charicter to a sound class or group of sound classes"""
+		logging.debug('COMPARING ' + str(letter) + ' and ' + str(patternValue))
+		if type(patternValue) == PhonologicalClasses:
+			# check match
+			if patternValue in letter.value:
+				return True
+			else:
+				return False
+		elif patternValue == '.':
+			#always return true
+			return True
+		else:
+			# error occurs, return false
+			logging.debug('PATTERN MATCH ERROR')
+			return False
+
 	def matchEdge (self, values: list, edge: str = 'l'):
 		logging.debug('edge matching; pattern: ' + str(self.pattern) + '; edge: ' + edge + '; values: ' + str(values))
 		# control variables
-		control = 'nil'
 		environmentFound = []
-		temp = ''
 		# catch any list overflows, returning nil if one occurs
 		try:
 			# right edge of values search
@@ -100,79 +213,67 @@ class PhonoPattern:
 
 				return returnVal
 
-				'''j = -1
-				for i in range(-1, -1 * (len(self.pattern) +1 ), -1):
-					logging.debug(str(i) + '; ' +  str(j))
-					# look for control variable
-					if self.pattern[i] == '*':
-						logging.debug('control: *')
-						control = '*'
-					# values 
-					if type(self.pattern[i]) == bool:
-						#handle control
-						if control == '*':
-							# one or more of charicter
-							temp = ''
-							while values[j].value == self.pattern[i]:
-								# add next charicter to enviroment if it matches pattern
-								temp = values[j].letter + temp
-								j -= 1
-							# find minimum number of occurences
-							minOccurence = 0
-							logging.debug(range(i, -(len(self.pattern))))
-							logging.debug(str(self.pattern))
-							for sub in range(i, -(len(self.pattern))):
-								if self.pattern[sub] == self.pattern[i]:
-									# add to minimum number of occurences
-									minOccurence += 1
-								else:
-									# if not a match, break and move index to last match
-									i = sub + 1
-									break
-								# if the end of the pattern is reached as a match, move index to end
-								if sub == -(len(self.pattern)):
-									i = sub
-							# check to see if match
-							if len(temp) < minOccurence:
-								# not enough occurences to match pattern
-								logging.debug('no match')
-								return 'nil'
-							else:
-								# match found; add to frount of found enviroment. reset control
-								for val in temp:
-									environmentFound = temp + environmentFound
-								control = 'nil'
-						#not control
-						else:
-							logging.debug(values[j])
-							# check match
-							if values[j].value == self.pattern[i]:
-								environmentFound = values[j].letter + environmentFound
-								j -= 1
-							else:
-								logging.debug('no match')
-								return 'nil' '''
-
 			else:
 				# left edge search
 				j = 0
 				for i in range(len(self.pattern)):
-				# look for control variable
+					logging.debug('pattern: ' + str(self.pattern[i]) + '; j: ' + str(j) + '; i: ' + str(i))
+					# look for control variable
 					if self.pattern[i] == '*':
 						# look back and match multibles of previous value
-						while values[j].value == self.pattern[i-1]:
+						# if proceding charicter is proceded by a negative, then look for not that charicter
+						if i-2 >= 0 and self.pattern[i-2] == '^':
+							while not PhonoPattern.matchVal(values[j], self.pattern[i-1]):
+								# If wildcard charicter; cheack to see if next charicter would match the next peice of the pattern
+								if self.pattern == '.' and i+1 < len(self.pattern):
+									if PhonoPattern.matchVal(values[j], self.pattern[i+1]):
+										break
 								# add next charicter to enviroment if it matches pattern
 								environmentFound.append(values[j].letter)
 								j += 1
-					# values 
-					if type(self.pattern[i]) == bool:
-						# check match
-						if values[j].value == self.pattern[i]:
+						else:
+							while PhonoPattern.matchVal(values[j], self.pattern[i-1]):
+								# If wildcard charicter; cheack to see if next charicter would match the next peice of the pattern
+								if self.pattern == '.' and i+1 < len(self.pattern):
+									if PhonoPattern.matchVal(values[j], self.pattern[i+1]):
+										break
+								# add next charicter to enviroment if it matches pattern
+								environmentFound.append(values[j].letter)
+								j += 1
+					elif self.pattern[i] == '^':
+						# not next value
+						if not PhonoPattern.matchVal(values[j], self.pattern[i+1]):
 							environmentFound.append(values[j].letter)
 							j += 1
+							i += 1
 						else:
-							logging.debug('no match')
+							#pattern does not match
 							return ['nil']
+					# set 
+					elif type(self.pattern[i]) == list:
+						# for each member of set, do a edge match starting at current charicter
+						temp = []
+						for k in self.pattern[i]:
+							temp = k.edgeMatch(values[j:], 'l')
+							if temp[0] != 'nil':
+								# match found
+								break
+						# check to see if match found
+						if temp[0] != 'nil':
+							for k in temp:
+								# add to match, and move charicter pointer up
+								environmentFound.append(k)
+								j += 1
+						else:
+							#no match
+							return ['nil']
+					# normal value
+					elif PhonoPattern.matchVal(values[j], self.pattern[i]):
+						environmentFound.append(values[j].letter)
+						j += 1
+					else:
+						return ['nil']
+
 			logging.debug('match found: ' + str(environmentFound))
 			return environmentFound
 		except (IndexError):
@@ -183,7 +284,7 @@ class PhonoPattern:
 	def match (self, values: list):
 		_matches = []
 		for i in range(len(values)):
-			if values[i].value == self.pattern[0]:
+			if PhonoPattern.matchVal(values[i], self.pattern[0]):
 				# if a charicter matches the first part of the pattern, treat it as the start of an matchEdge
 				temp = self.matchEdge(values[i:], 'l')
 				if temp[0] != 'nil':
@@ -198,17 +299,6 @@ class PhonoPattern:
 		# if no matches found, return the empty array
 		return _matches
 
-
-
-class PhonologicalValue:
-	def __init__(self, rawString):
-		# convert the letter to lower case for the phonological information
-		self.letter = rawString.lower()
-		self.value = bool(reV.match(rawString)) # V = true; C = false
-		#logging.debug(self)
-
-	def __repr__ (self):
-		return (self.letter + ', ' + str(self.value))
 
 class Morpheme:
 	def __init__ (self, boundry: str, values: list[PhonologicalValue]):
